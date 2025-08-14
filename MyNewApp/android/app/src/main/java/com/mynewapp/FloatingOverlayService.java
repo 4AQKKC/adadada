@@ -1,4 +1,4 @@
-package com.yourapp.overlay;
+package com.mynewapp;
 
 import android.app.Service;
 import android.content.Intent;
@@ -10,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
+import com.mynewapp.R;
 
 public class FloatingOverlayService extends Service {
     private WindowManager windowManager;
