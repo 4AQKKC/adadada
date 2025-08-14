@@ -8,41 +8,49 @@
     android:elevation="12dp"
     android:alpha="0.85">
 
-    <LinearLayout android:orientation="horizontal"
+    <LinearLayout
+        android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
-        <TextView android:id="@+id/txtTitle"
+        <TextView
+            android:id="@+id/txtTitle"
             android:text="(- BTOOL AUTO -)"
-            android:textColor="#fff"
+            android:textColor="#FFFFFF"
             android:textStyle="bold"
             android:layout_weight="1"
             android:layout_width="0dp"
             android:layout_height="wrap_content"/>
-        <ImageView android:id="@+id/btnClose"
+        <ImageView
+            android:id="@+id/btnClose"
             android:src="@android:drawable/ic_menu_close_clear_cancel"
             android:layout_width="24dp"
             android:layout_height="24dp"/>
     </LinearLayout>
 
-    <TextView android:id="@+id/txtUser"
+    <TextView
+        android:id="@+id/txtUser"
         android:text="userGOLIKE: ..."
         android:textColor="#4aeaff"
         android:textSize="13sp"
         android:layout_marginTop="4dp"/>
-    <TextView android:id="@+id/txtTiktok"
+    <TextView
+        android:id="@+id/txtTiktok"
         android:text="Tiktok: ..."
-        android:textColor="#fff"
+        android:textColor="#FFFFFF"
         android:textSize="13sp"/>
-    <TextView android:id="@+id/txtJob"
+    <TextView
+        android:id="@+id/txtJob"
         android:text="Job: 0/0"
-        android:textColor="#fff"
+        android:textColor="#FFFFFF"
         android:textSize="13sp"/>
-    <TextView android:id="@+id/txtXu"
+    <TextView
+        android:id="@+id/txtXu"
         android:text="xu: 0 đồng"
         android:textColor="#ffdb4d"
         android:textSize="13sp"/>
-    <TextView android:id="@+id/txtStatus"
+    <TextView
+        android:id="@+id/txtStatus"
         android:text="tt: Đang chạy..."
-        android:textColor="#fff"
+        android:textColor="#FFFFFF"
         android:textSize="13sp"/>
 </LinearLayout>
