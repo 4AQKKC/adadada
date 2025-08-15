@@ -85,9 +85,9 @@ android {
         versionCode 1
         versionName "1.0"
     }
-    packagingOptions {
-        pickFirst "**/libreact_featureflagsjni.so"
-        doNotStrip "**/libreact_featureflagsjni.so"
+    // packagingOptions {
+        // pickFirst "**/libreact_featureflagsjni.so"
+        // doNotStrip "**/libreact_featureflagsjni.so"
     }
     signingConfigs {
         debug {
