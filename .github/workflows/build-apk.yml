@@ -1,61 +1,42 @@
-name: Build Android APK with Debug Logs
+name: Collect Logs Only
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
-env:
-  PROJECT_DIR: MyNewApp
-  JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
-
 jobs:
-  build:
+  collect-logs:
     runs-on: ubuntu-latest
+    env:
+      PROJECT_DIR: MyNewApp
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 22
-
-      - name: Setup Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: 17
 
       - name: Install dependencies
         run: |
           cd $PROJECT_DIR
           npm install
 
-      - name: Bundle JS (Metro) with verbose log
-        run: |
-          cd $PROJECT_DIR
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res \
-            --verbose 2>&1 | tee metro.log
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
 
-      - name: Build APK Release with Gradle logs
+      - name: Run Gradle debug (no APK build)
         run: |
           cd $PROJECT_DIR/android
           chmod +x ./gradlew
-          ./gradlew assembleRelease --stacktrace --info --warning-mode all 2>&1 | tee gradle.log
+          # --dry-run cho các task để không build APK
+          ./gradlew assembleRelease --info --stacktrace --dry-run > ../../debug-log.txt 2>&1
 
-      - name: Upload APK and Logs
+      - name: Upload debug log
         uses: actions/upload-artifact@v4
         with:
-          name: android-artifacts
-          path: |
-            $PROJECT_DIR/android/app/build/outputs/**/*.apk
-            $PROJECT_DIR/metro.log
-            $PROJECT_DIR/android/gradle.log
-            $PROJECT_DIR/android/build/reports/problems/problems-report.html
+          name: debug-log
+          path: $PROJECT_DIR/debug-log.txt
