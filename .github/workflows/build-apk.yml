@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_DIR: MyNewApp   # Thư mục chứa project React Native
+  PROJECT_DIR: MyNewApp
   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repo (không dùng submodule)
+      # 1. Checkout repo
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -25,12 +25,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 22
+          node-version: 18
 
-      # 3. Install npm dependencies
+      # 3. Install dependencies
       - name: Install dependencies
         working-directory: ${{ env.PROJECT_DIR }}
-        run: npm install
+        run: |
+          npm ci
+          npx jetify
 
       # 4. Setup JDK
       - name: Setup Java
@@ -40,16 +42,25 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # 5. Grant execute permission for gradlew
+      # 5. Set up Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 6. Build React Native Android libs (fix thiếu .so)
+      - name: Build React Native Android libs
+        working-directory: ${{ env.PROJECT_DIR }}/node_modules/react-native/ReactAndroid
+        run: ./gradlew :ReactAndroid:assembleRelease
+
+      # 7. Grant execute permission for gradlew
       - name: Grant Gradle wrapper permission
         run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
 
-      # 6. Build release APK
+      # 8. Build Release APK
       - name: Build Release APK
         working-directory: ${{ env.PROJECT_DIR }}/android
         run: ./gradlew assembleRelease
 
-      # 7. Check APK exists
+      # 9. Check APK exists
       - name: Check APK
         run: |
           APK_PATH="${PROJECT_DIR}/android/app/build/outputs/apk/release/app-release.apk"
@@ -60,7 +71,7 @@ jobs:
             exit 1
           fi
 
-      # 8. Upload APK artifact
+      # 10. Upload APK artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
