@@ -1,4 +1,4 @@
-name: Collect Full Debug Log
+name: Build Android APK
 
 on:
   push:
@@ -9,14 +9,13 @@ on:
 env:
   PROJECT_DIR: MyNewApp   # Thư mục chứa project React Native
   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
-  LOG_FILE: full-debug-log.txt
 
 jobs:
-  collect-log:
+  build-apk:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout code
+      # 1. Checkout repo (không dùng submodule)
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -33,7 +32,7 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: npm install
 
-      # 4. Setup Java
+      # 4. Setup JDK
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
@@ -41,21 +40,30 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # 5. Grant Gradle wrapper permission
+      # 5. Grant execute permission for gradlew
       - name: Grant Gradle wrapper permission
         run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
 
-      # 6. Run build and save full log
-      - name: Run Gradle build and save log
+      # 6. Build release APK
+      - name: Build Release APK
         working-directory: ${{ env.PROJECT_DIR }}/android
-        run: |
-          ./gradlew assembleRelease > ../${LOG_FILE} 2>&1 || true
-          echo "Full log saved to ../${LOG_FILE}"
+        run: ./gradlew assembleRelease
 
-      # 7. Upload full debug log artifact
-      - name: Upload full debug log
+      # 7. Check APK exists
+      - name: Check APK
+        run: |
+          APK_PATH="${PROJECT_DIR}/android/app/build/outputs/apk/release/app-release.apk"
+          if [ -f "$APK_PATH" ]; then
+            echo "APK found at $APK_PATH"
+          else
+            echo "ERROR: APK not found!"
+            exit 1
+          fi
+
+      # 8. Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: full-debug-log
-          path: ${{ env.PROJECT_DIR }}/${{ env.LOG_FILE }}
+          name: app-release
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
