@@ -4,6 +4,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Linking } from "react-native";
+import { WebView } from "react-native-webview";
 
 // Lấy danh sách acc TikTok liên kết với Golike
 async function fetchTiktokAccounts(auth: string): Promise<{username: string}[]> {
@@ -42,6 +43,16 @@ async function fetchJob(auth: string) {
   return data.data || null;
 }
 
+// Hàm lấy Authorization từ cookie trong WebView
+function extractAuthFromCookie(cookieStr: string): string | null {
+  // Tùy vào Golike, thường sẽ có cookie tên là "Authorization" hoặc "access_token"
+  // Ví dụ: "Authorization=Bearer abcdefg; Path=/; ...", hoặc access_token=...
+  // Bạn cần kiểm tra tên cookie chuẩn của Golike sau khi login.
+  const match = cookieStr.match(/Authorization=([^;]+)/)
+    || cookieStr.match(/access_token=([^;]+)/);
+  return match ? match[1] : null;
+}
+
 export default function App() {
   const [authorization, setAuthorization] = useState("");
   const [isEnabled, setIsEnabled] = useState(false);
@@ -54,6 +65,9 @@ export default function App() {
   const [xu, setXu] = useState(0);
   const [authStatus, setAuthStatus] = useState<"idle"|"checking"|"valid"|"invalid">("idle");
   const jobInterval = useRef<any>(null);
+
+  // WebView login state
+  const [showWebLogin, setShowWebLogin] = useState(false);
 
   // Lưu lại authorization
   useEffect(() => {
@@ -106,7 +120,6 @@ export default function App() {
       stopJobAutomation();
     }
     return stopJobAutomation;
-    // eslint-disable-next-line
   }, [isEnabled]);
 
   // Xin quyền overlay, accessibility
@@ -158,19 +171,62 @@ export default function App() {
     return new Promise((res) => setTimeout(res, ms));
   }
 
+  // Xử lý sự kiện từ WebView đăng nhập
+  function onWebViewNavigationStateChange(navState: any) {
+    // Khi chuyển sang trang sau đăng nhập, lấy cookie
+    // Lưu ý: Chỉ lấy cookie khi đã đăng nhập thành công (thường là chuyển sang dashboard Golike)
+    // Do bảo mật, bạn cần cấu hình WebView cho phép lấy cookie (hoặc inject JS để lấy sessionStorage/localStorage)
+    // Ví dụ:
+    // if (navState.url.includes("/dashboard") && !authorization) { ... }
+  }
+
+  // Inject JS để lấy cookie (hoặc token) sau login
+  const injectedJS = `
+    setTimeout(function() {
+      window.ReactNativeWebView.postMessage(document.cookie);
+    }, 1200);
+    true;
+  `;
+
+  function onWebViewMessage(event: any) {
+    const cookie = event.nativeEvent.data;
+    const token = extractAuthFromCookie(cookie);
+    if (token) {
+      setAuthorization(token.startsWith("Bearer ") ? token : `Bearer ${token}`);
+      setShowWebLogin(false);
+    } else {
+      Alert.alert("Không lấy được Authorization, vui lòng thử lại!");
+    }
+  }
+
   return (
     <View style={styles.container}>
-      {/* Xanh lá - nhập Authorization */}
-      <TextInput
-        style={styles.green}
-        placeholder="Nhập Authorization Golike"
-        value={authorization}
-        onChangeText={setAuthorization}
-        autoCapitalize="none"
-        autoCorrect={false}
-        editable={authStatus !== "checking"}
-      />
-      {/* Thông báo trạng thái authorization */}
+      {/* Thay trường nhập Authorization bằng nút đăng nhập */}
+      {authorization ? (
+        <View>
+          <Text style={{color: "#158a31", marginBottom: 6}}>Đã đăng nhập Golike!</Text>
+          <TouchableOpacity
+            style={styles.green}
+            onPress={() => {
+              setAuthorization("");
+              setUserGoLike("");
+              setAccounts([]);
+              setTiktokAccount("");
+              setAuthStatus("idle");
+            }}
+          >
+            <Text style={{color: "#fff"}}>Đăng xuất</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.green}
+          onPress={() => setShowWebLogin(true)}
+        >
+          <Text style={{color: "#fff", fontWeight: "bold"}}>Đăng nhập Golike</Text>
+        </TouchableOpacity>
+      )}
+
       {authStatus === "checking" && (
         <Text style={{color: "#2469c8", marginBottom: 6}}>Đang kiểm tra Authorization...</Text>
       )}
@@ -233,10 +289,25 @@ export default function App() {
           </View>
         </View>
       </Modal>
+
+      {/* WebView đăng nhập Golike */}
+      <Modal
+        visible={showWebLogin}
+        animationType="slide"
+        onRequestClose={() => setShowWebLogin(false)}
+      >
+        <WebView
+          source={{ uri: "https://app.golike.net/login" }}
+          injectedJavaScript={injectedJS}
+          onMessage={onWebViewMessage}
+          startInLoadingState={true}
+        />
+      </Modal>
     </View>
   );
 }
 
+// Styles giữ nguyên như cũ
 const styles = StyleSheet.create({
   container: {
     marginTop: 40,
