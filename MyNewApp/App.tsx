@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, PermissionsAndroid, Platform, Modal
+  View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, PermissionsAndroid, Platform, Modal, Alert
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Linking } from "react-native";
 
-// Hàm fetch các acc TikTok đã liên kết với acc Golike
+// Lấy danh sách acc TikTok liên kết với Golike
 async function fetchTiktokAccounts(auth: string): Promise<{username: string}[]> {
   const resp = await fetch("https://app.golike.net/api/linked-social-accounts/list", {
     headers: { Authorization: auth }
@@ -17,7 +17,22 @@ async function fetchTiktokAccounts(auth: string): Promise<{username: string}[]> 
     .map((acc: any) => ({ username: acc.username || acc.name }));
 }
 
-// Hàm tự động nhận job
+// Kiểm tra authorization hợp lệ, trả về user info nếu đúng, null nếu sai
+async function checkAuthorization(auth: string): Promise<null | {username: string}> {
+  try {
+    const resp = await fetch("https://app.golike.net/api/user/info", {
+      headers: { Authorization: auth }
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data.data && data.data.username) return { username: data.data.username };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Nhận job follow TikTok
 async function fetchJob(auth: string) {
   const resp = await fetch("https://app.golike.net/api/jobs/next-job?job_type=tiktok_follow", {
     headers: { Authorization: auth }
@@ -37,6 +52,7 @@ export default function App() {
   const [jobInfo, setJobInfo] = useState<any>(null);
   const [jobCount, setJobCount] = useState(0);
   const [xu, setXu] = useState(0);
+  const [authStatus, setAuthStatus] = useState<"idle"|"checking"|"valid"|"invalid">("idle");
   const jobInterval = useRef<any>(null);
 
   // Lưu lại authorization
@@ -49,20 +65,39 @@ export default function App() {
     if (authorization) AsyncStorage.setItem("authorization", authorization);
   }, [authorization]);
 
-  // Lấy danh sách acc TikTok khi có auth
+  // Khi authorization thay đổi, kiểm tra hợp lệ rồi mới lấy danh sách acc
   useEffect(() => {
-    if (authorization) {
-      fetchTiktokAccounts(authorization).then(setAccounts);
-      // Lấy tên user GoLike
-      fetch("https://app.golike.net/api/user/info", { headers: { Authorization: authorization } })
-        .then(r => r.json())
-        .then(data => setUserGoLike(data.data?.username || ""));
+    if (!authorization) {
+      setAccounts([]);
+      setUserGoLike("");
+      setAuthStatus("idle");
+      setTiktokAccount("");
+      return;
     }
+    setAuthStatus("checking");
+    checkAuthorization(authorization).then((userInfo) => {
+      if (userInfo) {
+        setAuthStatus("valid");
+        setUserGoLike(userInfo.username);
+        fetchTiktokAccounts(authorization).then(setAccounts);
+      } else {
+        setAuthStatus("invalid");
+        setUserGoLike("");
+        setAccounts([]);
+        setTiktokAccount("");
+      }
+    });
   }, [authorization]);
 
   // Khi bật automation
   useEffect(() => {
     if (isEnabled) {
+      // Kiểm tra acc tiktok nhập vào phải có trong list
+      if (!accounts.find(acc => acc.username === tiktokAccount)) {
+        Alert.alert("Lỗi", "Vui lòng nhập chính xác tên tài khoản TikTok đã liên kết bên dưới để sử dụng.");
+        setIsEnabled(false);
+        return;
+      }
       setOverlayVisible(true);
       startJobAutomation();
       askPermissions();
@@ -71,19 +106,17 @@ export default function App() {
       stopJobAutomation();
     }
     return stopJobAutomation;
+    // eslint-disable-next-line
   }, [isEnabled]);
 
   // Xin quyền overlay, accessibility
   async function askPermissions() {
     if (Platform.OS === "android") {
-      // Overlay
       await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.SYSTEM_ALERT_WINDOW
       );
-      // File
       await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
       await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
-      // Accessibility: user vào Settings bật thủ công
     }
   }
 
@@ -102,7 +135,7 @@ export default function App() {
       if (job.social_link) await Linking.openURL(job.social_link);
       // Đợi accessibility service auto "Follow"
       await sleep(10000);
-      // Gọi "Hoàn thành" (cần gửi request lên server Golike hoặc mô phỏng click, demo chỉ fetch)
+      // Gọi "Hoàn thành" (cần gửi request lên server Golike)
       if (job.id) {
         await fetch(`https://app.golike.net/api/jobs/${job.id}/complete`, {
           method: "POST",
@@ -127,22 +160,46 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      {/* Xanh lá - nhập Authorization */}
       <TextInput
         style={styles.green}
         placeholder="Nhập Authorization Golike"
         value={authorization}
         onChangeText={setAuthorization}
         autoCapitalize="none"
+        autoCorrect={false}
+        editable={authStatus !== "checking"}
       />
-      <TouchableOpacity style={styles.blue} onPress={() => setIsEnabled((e) => !e)}>
+      {/* Thông báo trạng thái authorization */}
+      {authStatus === "checking" && (
+        <Text style={{color: "#2469c8", marginBottom: 6}}>Đang kiểm tra Authorization...</Text>
+      )}
+      {authStatus === "invalid" && (
+        <Text style={{color: "red", marginBottom: 6}}>Authorization không hợp lệ!</Text>
+      )}
+
+      {/* Xanh nước biển - nút bật/tắt */}
+      <TouchableOpacity
+        style={[
+          styles.blue,
+          {opacity: authStatus === "valid" && tiktokAccount ? 1 : 0.5}
+        ]}
+        onPress={() => setIsEnabled((e) => !e)}
+        disabled={authStatus !== "valid" || !tiktokAccount}
+      >
         <Text style={{color: "#fff", fontWeight: "bold"}}>{isEnabled ? "Tắt" : "Bật"}</Text>
       </TouchableOpacity>
+      {/* Vàng - nhập tài khoản tiktok */}
       <TextInput
         style={styles.yellow}
-        placeholder="Tài khoản TikTok đang dùng"
+        placeholder="Nhập chính xác tên TikTok để sử dụng"
         value={tiktokAccount}
         onChangeText={setTiktokAccount}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={authStatus === "valid"}
       />
+      {/* Đỏ - danh sách acc tiktok liên kết */}
       <View style={styles.red}>
         <Text style={{color: "#fff", fontWeight: "bold"}}>Danh sách acc TikTok liên kết:</Text>
         <FlatList
@@ -150,6 +207,9 @@ export default function App() {
           keyExtractor={item => item.username}
           renderItem={({item}) => (
             <Text style={{color: "#fff"}}>{item.username}</Text>
+          )}
+          ListEmptyComponent={() => (
+            <Text style={{color: "#fff"}}>Chưa có tài khoản TikTok liên kết</Text>
           )}
         />
       </View>
@@ -203,6 +263,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    width: 80,
+    alignSelf: "flex-start",
+    marginLeft: 8,
+    opacity: 1
   },
   yellow: {
     borderWidth: 2,
@@ -220,15 +284,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#f91c1c",
     padding: 18,
     borderRadius: 8,
-    minHeight: 150,
+    minHeight: 200,
     marginTop: 10,
   },
   overlayContainer: {
     position: "absolute",
     top: 60,
     left: 20,
-    width: 120, // 4cm cho màn hình ~30px/cm
-    height: 90, // 3cm
+    width: 120,
+    height: 90,
     backgroundColor: "rgba(50,50,50,0.35)",
     borderRadius: 12,
     justifyContent: "center",
