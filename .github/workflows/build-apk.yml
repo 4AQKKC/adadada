@@ -49,11 +49,14 @@ jobs:
       # 5. Grant execute permission for gradlew
       - name: Grant Gradle wrapper permission
         run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
+      
+      - name: ./gradlew clean
+        working-directory: ${{ env.PROJECT_DIR }}/android
+        run: ./gradlew clean
 
       # 6. Build release APK
       - name: Build Release APK
         working-directory: ${{ env.PROJECT_DIR }}/android
-        run: ./gradlew clean
         run: ./gradlew assembleRelease
 
       # 7. Check APK exists
