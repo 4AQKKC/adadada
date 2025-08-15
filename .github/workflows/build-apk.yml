@@ -53,6 +53,7 @@ jobs:
       # 6. Build release APK
       - name: Build Release APK
         working-directory: ${{ env.PROJECT_DIR }}/android
+        run: ./gradlew clean
         run: ./gradlew assembleRelease
 
       # 7. Check APK exists
