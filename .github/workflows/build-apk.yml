@@ -1,4 +1,4 @@
-name: Build APK and Save Full Debug Log
+name: Collect Full Debug Log
 
 on:
   push:
@@ -7,46 +7,55 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_DIR: MyNewApp
+  PROJECT_DIR: MyNewApp   # Thư mục chứa project React Native
+  JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
   LOG_FILE: full-debug-log.txt
 
 jobs:
-  build-and-log:
+  collect-log:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      # 1. Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
-      - name: Set execute permission for gradlew
-        run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
-
-      - name: Install Node.js
+      # 2. Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20'
+          node-version: 22
 
-      - name: Install NPM dependencies
+      # 3. Install npm dependencies
+      - name: Install dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: npm install
 
-      - name: Run Gradle assembleRelease with full logging
+      # 4. Setup Java
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      # 5. Grant Gradle wrapper permission
+      - name: Grant Gradle wrapper permission
+        run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
+
+      # 6. Run build and save full log
+      - name: Run Gradle build and save log
         working-directory: ${{ env.PROJECT_DIR }}/android
         run: |
-          ./gradlew assembleRelease --stacktrace --info --warning-mode all 2>&1 | tee ../../${LOG_FILE}
+          ./gradlew assembleRelease > ../${LOG_FILE} 2>&1 || true
+          echo "Full log saved to ../${LOG_FILE}"
 
-      - name: Run React Native JS bundler (optional)
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res \
-            2>&1 | tee -a ../${LOG_FILE}
-
+      # 7. Upload full debug log artifact
       - name: Upload full debug log
         uses: actions/upload-artifact@v4
         with:
           name: full-debug-log
-          path: ${{ env.PROJECT_DIR }}/${LOG_FILE}
+          path: ${{ env.PROJECT_DIR }}/${{ env.LOG_FILE }}
+          if-no-files-found: error
