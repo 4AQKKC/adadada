@@ -1,4 +1,4 @@
-package com.ten_project_name;
+package com.mynewapp;
 
 import android.accessibilityservice.AccessibilityService;
 import android.view.accessibility.AccessibilityEvent;
