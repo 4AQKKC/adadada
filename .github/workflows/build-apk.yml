@@ -1,4 +1,4 @@
-name: Save Build Log
+name: Build APK and Save Full Debug Log
 
 on:
   push:
@@ -8,9 +8,10 @@ on:
 
 env:
   PROJECT_DIR: MyNewApp
+  LOG_FILE: full-debug-log.txt
 
 jobs:
-  log_debug:
+  build-and-log:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,13 +20,33 @@ jobs:
       - name: Set execute permission for gradlew
         run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
 
-      - name: Run Gradle build and save log
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm install
+
+      - name: Run Gradle assembleRelease with full logging
         working-directory: ${{ env.PROJECT_DIR }}/android
         run: |
-          ./gradlew assembleRelease --stacktrace --info 2>&1 | tee ../../debug-log.txt
+          ./gradlew assembleRelease --stacktrace --info --warning-mode all 2>&1 | tee ../../${LOG_FILE}
 
-      - name: Upload debug log
+      - name: Run React Native JS bundler (optional)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res \
+            2>&1 | tee -a ../${LOG_FILE}
+
+      - name: Upload full debug log
         uses: actions/upload-artifact@v4
         with:
-          name: debug-log
-          path: ${{ env.PROJECT_DIR }}/debug-log.txt
+          name: full-debug-log
+          path: ${{ env.PROJECT_DIR }}/${LOG_FILE}
