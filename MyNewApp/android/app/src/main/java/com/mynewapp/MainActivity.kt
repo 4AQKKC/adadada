@@ -7,5 +7,5 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
 class MainActivity : ReactActivity() {
   override fun getMainComponentName(): String = "MyNewApp"
   override fun createReactActivityDelegate(): ReactActivityDelegate =
-      DefaultReactActivityDelegate(this, mainComponentName, false)
+      DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
 }
