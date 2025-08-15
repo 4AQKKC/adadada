@@ -1,42 +1,31 @@
-name: Collect Logs Only
+name: Save Build Log
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
+env:
+  PROJECT_DIR: MyNewApp
+
 jobs:
-  collect-logs:
+  log_debug:
     runs-on: ubuntu-latest
-    env:
-      PROJECT_DIR: MyNewApp
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 22
+      - name: Set execute permission for gradlew
+        run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
 
-      - name: Install dependencies
+      - name: Run Gradle build and save log
+        working-directory: ${{ env.PROJECT_DIR }}/android
         run: |
-          cd $PROJECT_DIR
-          npm install
-
-      - name: Set up Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Run Gradle debug (no APK build)
-        run: |
-          cd $PROJECT_DIR/android
-          chmod +x ./gradlew
-          # --dry-run cho các task để không build APK
-          ./gradlew assembleRelease --info --stacktrace --dry-run > ../../debug-log.txt 2>&1
+          ./gradlew assembleRelease --stacktrace --info 2>&1 | tee ../../debug-log.txt
 
       - name: Upload debug log
         uses: actions/upload-artifact@v4
         with:
           name: debug-log
-          path: $PROJECT_DIR/debug-log.txt
+          path: ${{ env.PROJECT_DIR }}/debug-log.txt
