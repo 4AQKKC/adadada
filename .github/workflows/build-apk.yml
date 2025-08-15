@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK with Debug Logs
 
 on:
   push:
@@ -7,63 +7,55 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_DIR: MyNewApp   # Thư mục chứa project React Native
+  PROJECT_DIR: MyNewApp
   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Checkout repo (không dùng submodule)
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: false
 
-      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 22
 
-      # 3. Install npm dependencies
-      - name: Install dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: npm install
-
-      # 4. Setup JDK
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
 
-      # 5. Grant execute permission for gradlew
-      - name: Grant Gradle wrapper permission
-        run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
-
-      # 6. Build release APK
-      - name: Build Release APK
-        working-directory: ${{ env.PROJECT_DIR }}/android
-        run: ./gradlew assembleRelease
-
-      # 7. Check APK exists
-      - name: Check APK
+      - name: Install dependencies
         run: |
-          APK_PATH="${PROJECT_DIR}/android/app/build/outputs/apk/release/app-release.apk"
-          if [ -f "$APK_PATH" ]; then
-            echo "APK found at $APK_PATH"
-          else
-            echo "ERROR: APK not found!"
-            exit 1
-          fi
+          cd $PROJECT_DIR
+          npm install
 
-      # 8. Upload APK artifact
-      - name: Upload APK
+      - name: Bundle JS (Metro) with verbose log
+        run: |
+          cd $PROJECT_DIR
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res \
+            --verbose 2>&1 | tee metro.log
+
+      - name: Build APK Release with Gradle logs
+        run: |
+          cd $PROJECT_DIR/android
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --stacktrace --info --warning-mode all 2>&1 | tee gradle.log
+
+      - name: Upload APK and Logs
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
+          name: android-artifacts
+          path: |
+            $PROJECT_DIR/android/app/build/outputs/**/*.apk
+            $PROJECT_DIR/metro.log
+            $PROJECT_DIR/android/gradle.log
+            $PROJECT_DIR/android/build/reports/problems/problems-report.html
