@@ -7,16 +7,14 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_DIR: MyNewApp   # Thư mục chứa project React Native
+  PROJECT_DIR: MyNewApp # Thư mục chứa project React Native
   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
-  NODE_OPTIONS: --max_old_space_size=4096
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Lấy source code
+      # 1. Checkout repo
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -26,17 +24,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 18
-          cache: 'npm'
+          node-version: 22
 
-      # 3. Cài dependencies Node.js
+      # 3. Install npm dependencies (auto-fix lockfile mismatch)
       - name: Install dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          npm install --legacy-peer-deps
-          npm install -g react-native-cli
+          if [ -f package-lock.json ]; then
+            echo "🔹 Lock file found. Trying npm ci..."
+            npm ci || (echo "⚠ Lock file mismatch. Running npm install instead..." && npm install)
+          else
+            echo "🔹 No lock file found. Running npm install..."
+            npm install
+          fi
 
-      # 4. Setup Java
+      # 4. Setup JDK
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
@@ -44,48 +46,28 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # 5. Cài Android SDK & Build Tools
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      # 6. Xóa build cũ để tránh lỗi
-      - name: Clean old builds
-        working-directory: ${{ env.PROJECT_DIR }}/android
-        run: ./gradlew clean
-
-      # 7. Bundle JS & Assets
-      - name: Bundle React Native JS
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res
-
-      # 8. Cấp quyền chạy Gradle
-      - name: Grant Gradle permission
+      # 5. Grant execute permission for gradlew
+      - name: Grant Gradle wrapper permission
         run: chmod +x ${{ env.PROJECT_DIR }}/android/gradlew
 
-      # 9. Build APK Release
+      # 6. Build release APK
       - name: Build Release APK
         working-directory: ${{ env.PROJECT_DIR }}/android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: ./gradlew assembleRelease
 
-      # 10. Kiểm tra APK có tồn tại không
+      # 7. Check APK exists
       - name: Check APK
         run: |
           APK_PATH="${PROJECT_DIR}/android/app/build/outputs/apk/release/app-release.apk"
           if [ -f "$APK_PATH" ]; then
-            echo "✅ APK built successfully: $APK_PATH"
+            echo "✅ APK found at $APK_PATH"
           else
             echo "❌ ERROR: APK not found!"
             exit 1
           fi
 
-      # 11. Upload file APK
-      - name: Upload APK Artifact
+      # 8. Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
