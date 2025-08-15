@@ -3,8 +3,10 @@ import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, PermissionsAndroid, Platform, Modal, Alert
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Linking } from "react-native";
+import { Linking, NativeModules } from "react-native";
 import { WebView } from "react-native-webview";
+
+const { FloatingOverlay } = NativeModules;
 
 // Lấy danh sách acc TikTok liên kết với Golike
 async function fetchTiktokAccounts(auth: string): Promise<{username: string}[]> {
@@ -43,22 +45,12 @@ async function fetchJob(auth: string) {
   return data.data || null;
 }
 
-// Hàm lấy Authorization từ cookie trong WebView
-function extractAuthFromCookie(cookieStr: string): string | null {
-  // Tùy vào Golike, thường sẽ có cookie tên là "Authorization" hoặc "access_token"
-  // Ví dụ: "Authorization=Bearer abcdefg; Path=/; ...", hoặc access_token=...
-  // Bạn cần kiểm tra tên cookie chuẩn của Golike sau khi login.
-  const match = cookieStr.match(/Authorization=([^;]+)/)
-    || cookieStr.match(/access_token=([^;]+)/);
-  return match ? match[1] : null;
-}
-
 export default function App() {
   const [authorization, setAuthorization] = useState("");
   const [isEnabled, setIsEnabled] = useState(false);
   const [tiktokAccount, setTiktokAccount] = useState("");
   const [accounts, setAccounts] = useState<{username: string}[]>([]);
-  const [overlayVisible, setOverlayVisible] = useState(false);
+  const [overlayVisible, setOverlayVisible] = useState(false); // dùng cho modal RN, có thể bỏ nếu dùng native overlay
   const [userGoLike, setUserGoLike] = useState("");
   const [jobInfo, setJobInfo] = useState<any>(null);
   const [jobCount, setJobCount] = useState(0);
@@ -112,15 +104,36 @@ export default function App() {
         setIsEnabled(false);
         return;
       }
-      setOverlayVisible(true);
+      // Gọi overlay native
+      FloatingOverlay.startOverlay(
+        userGoLike || "",
+        tiktokAccount || "",
+        jobCount,
+        xu,
+        jobInfo?.status || "Đang chạy..."
+      );
       startJobAutomation();
       askPermissions();
     } else {
-      setOverlayVisible(false);
+      FloatingOverlay.stopOverlay();
       stopJobAutomation();
     }
     return stopJobAutomation;
+    // eslint-disable-next-line
   }, [isEnabled]);
+
+  // Khi trạng thái job thay đổi thì cập nhật overlay
+  useEffect(() => {
+    if (isEnabled) {
+      FloatingOverlay.startOverlay(
+        userGoLike || "",
+        tiktokAccount || "",
+        jobCount,
+        xu,
+        jobInfo?.status || "Đang chạy..."
+      );
+    }
+  }, [jobInfo, jobCount, xu, isEnabled, userGoLike, tiktokAccount]);
 
   // Xin quyền overlay, accessibility
   async function askPermissions() {
@@ -171,26 +184,23 @@ export default function App() {
     return new Promise((res) => setTimeout(res, ms));
   }
 
-  // Xử lý sự kiện từ WebView đăng nhập
-  function onWebViewNavigationStateChange(navState: any) {
-    // Khi chuyển sang trang sau đăng nhập, lấy cookie
-    // Lưu ý: Chỉ lấy cookie khi đã đăng nhập thành công (thường là chuyển sang dashboard Golike)
-    // Do bảo mật, bạn cần cấu hình WebView cho phép lấy cookie (hoặc inject JS để lấy sessionStorage/localStorage)
-    // Ví dụ:
-    // if (navState.url.includes("/dashboard") && !authorization) { ... }
-  }
-
-  // Inject JS để lấy cookie (hoặc token) sau login
+  // Inject JS để lấy token từ localStorage["vuex"] sau login
   const injectedJS = `
     setTimeout(function() {
-      window.ReactNativeWebView.postMessage(document.cookie);
+      var vuex = localStorage.getItem("vuex");
+      if (vuex) {
+        var obj = JSON.parse(vuex);
+        var token = obj.token;
+        window.ReactNativeWebView.postMessage(token || "");
+      } else {
+        window.ReactNativeWebView.postMessage("");
+      }
     }, 1200);
     true;
   `;
 
   function onWebViewMessage(event: any) {
-    const cookie = event.nativeEvent.data;
-    const token = extractAuthFromCookie(cookie);
+    const token = event.nativeEvent.data;
     if (token) {
       setAuthorization(token.startsWith("Bearer ") ? token : `Bearer ${token}`);
       setShowWebLogin(false);
@@ -270,26 +280,6 @@ export default function App() {
         />
       </View>
 
-      {/* Overlay GUI */}
-      <Modal
-        transparent={true}
-        animationType="fade"
-        visible={overlayVisible}
-        onRequestClose={() => setOverlayVisible(false)}
-      >
-        <View style={styles.overlayContainer}>
-          <View style={styles.overlayBox}>
-            <Text style={styles.overlayText}>GOLIKE: {userGoLike}</Text>
-            <Text style={styles.overlayText}>TikTok: {tiktokAccount}</Text>
-            <Text style={styles.overlayText}>
-              Job: {jobCount}{jobInfo?.total ? `/${jobInfo.total}` : ""}
-            </Text>
-            <Text style={styles.overlayText}>xu: {xu} đồng</Text>
-            <Text style={styles.overlayText}>tt: {jobInfo?.status || "Đang chạy..."}</Text>
-          </View>
-        </View>
-      </Modal>
-
       {/* WebView đăng nhập Golike */}
       <Modal
         visible={showWebLogin}
@@ -307,7 +297,6 @@ export default function App() {
   );
 }
 
-// Styles giữ nguyên như cũ
 const styles = StyleSheet.create({
   container: {
     marginTop: 40,
@@ -357,33 +346,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     minHeight: 200,
     marginTop: 10,
-  },
-  overlayContainer: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    width: 120,
-    height: 90,
-    backgroundColor: "rgba(50,50,50,0.35)",
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "flex-start",
-    elevation: 10,
-  },
-  overlayBox: {
-    padding: 8,
-    width: "100%",
-    height: "100%",
-    borderRadius: 12,
-    opacity: 0.9,
-  },
-  overlayText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 13,
-    marginBottom: 2,
-    textShadowColor: "#333",
-    textShadowRadius: 2,
-    textShadowOffset: {width:1, height:1}
   }
 });
