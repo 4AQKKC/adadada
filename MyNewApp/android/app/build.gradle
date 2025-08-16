@@ -2,32 +2,46 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// =====================
+// React Native config
+// =====================
 react {
+    // Autolinking
     autolinkLibrariesWithApp()
 }
 
+// =====================
+// Enable Proguard
+// =====================
 def enableProguardInReleaseBuilds = false
-def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
-def hermesEnabled = project.ext.react.get("hermesEnabled", true) // bật Hermes mặc định
 
+// =====================
+// JSC flavor
+// =====================
+def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+
+// =====================
+// Hermes flag
+// =====================
+// Không dùng project.ext.react.get(), tránh read-only collection
+def hermesEnabled = true // true = bật Hermes, false = dùng JSC
+
+// =====================
+// Android config
+// =====================
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.mynewapp"
+
     defaultConfig {
         applicationId "com.mynewapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
-    }
-
-    // Thêm lại packagingOptions để include .so
-    packagingOptions {
-        pickFirst "**/libreact_featureflagsjni.so"
-        doNotStrip "**/libreact_featureflagsjni.so"
     }
 
     signingConfigs {
@@ -51,10 +65,13 @@ android {
     }
 }
 
+// =====================
+// Dependencies
+// =====================
 dependencies {
     implementation("com.facebook.react:react-android")
 
-    if (hermesEnabled.toBoolean()) {
+    if (hermesEnabled) {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
